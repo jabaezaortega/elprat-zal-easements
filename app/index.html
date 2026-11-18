@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZAL Port (Barcelona) vs LEBL airport easements (RD 657/2022) — 3D prototype</title>
+<script src="https://cdn.jsdelivr.net/npm/cesium@1.147.0/Build/Cesium/Cesium.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/cesium@1.147.0/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+<style>
+html,body,#v{margin:0;width:100%;height:100%;overflow:hidden;font-family:Arial,sans-serif}
+#panel{position:absolute;top:8px;left:8px;background:rgba(255,255,255,.93);padding:10px 12px;border-radius:6px;font-size:12px;max-width:330px;z-index:5;line-height:1.35}
+#panel h3{margin:0 0 6px;font-size:14px} #panel label{display:block;margin:2px 0} .sw{display:inline-block;width:11px;height:11px;margin-right:4px;vertical-align:middle;border:1px solid #555}
+#stats{margin-top:6px;padding:5px;background:#f3f3f3;border-radius:4px} small{color:#555}
+</style></head><body>
+<div id="v"></div><a href="#" id="show" style="display:none;position:absolute;top:8px;left:8px;z-index:6;background:#fff;padding:6px 10px;border-radius:6px;font:12px Arial">☰ Panel</a>
+<div id="panel">
+<h3>ZAL Port vs LEBL easements (RD 657/2022) <a href="#" id="hide" style="float:right;font-size:11px;font-weight:normal">hide panel</a></h3>
+<label><input type="radio" name="sc" value="now" checked> Buildings as built (LiDAR 2022)</label>
+<label><input type="radio" name="sc" value="p20"> Scenario: every building +20 m</label>
+<div id="stats"></div>
+<hr><label><input type="checkbox" id="envOn"> Strictest easement envelope (colour = governing surface)</label>
+<div id="leg"></div><label><input type="checkbox" id="zenvOn" checked> Envelope over ZAL only (5 m mesh, light blue)</label>
+Envelope opacity <input type="range" id="op" min="0.1" max="0.9" step="0.05" value="0.45" style="width:110px">
+<label>Vertical exaggeration <select id="ex"><option>1</option><option selected>2</option><option>3</option><option>5</option></select></label>
+<label>Basemap <select id="bm"><option value="light">Light grey (Esri)</option><option value="osm">OpenStreetMap</option><option value="esri">Esri World Imagery</option></select></label>
+<b>Building colour = clearance (limit − highest point)</b><br>
+<span class="sw" style="background:#d7191c"></span>&lt;0 m (penetrates) <span class="sw" style="background:#fdae61"></span>0–10 <span class="sw" style="background:#a6d96a"></span>10–20 <span class="sw" style="background:#1a9641"></span>&gt;20 m<br>
+<small>Click a building for details. Dots = highest LiDAR point of each building. Heights are orthometric (m AMSL, Alicante) drawn on the bare ellipsoid used as sea level (no terrain); geoid N ≈ +48.98 m here would only be needed with ellipsoidal terrain. Geometric prototype — no legal value; the official reference is RD 657/2022 + AESA.</small>
+</div>
+<script>
+Cesium.Ion.defaultAccessToken = '';
+const viewer = new Cesium.Viewer('v', {baseLayer:false, baseLayerPicker:false, geocoder:false, timeline:false, animation:false,
+  sceneModePicker:false, navigationHelpButton:true, homeButton:true, fullscreenButton:true, terrainProvider:new Cesium.EllipsoidTerrainProvider(), infoBox:true, selectionIndicator:true, navigationInstructionsInitiallyVisible:false});
+const L = {light:new Cesium.UrlTemplateImageryProvider({url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',maximumLevel:16,credit:'Esri, HERE, Garmin, © OpenStreetMap contributors'}), osm:new Cesium.OpenStreetMapImageryProvider({url:'https://tile.openstreetmap.org/'}),
+  esri:new Cesium.UrlTemplateImageryProvider({url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',maximumLevel:19,credit:'Esri, Maxar, Earthstar Geographics, GIS User Community'})};
+const Q = new URLSearchParams(location.search);
+const BM0 = Q.get('bm') || 'light'; document.getElementById('bm').value = BM0;
+let base = viewer.imageryLayers.addImageryProvider(L[BM0]);
+document.getElementById('bm').onchange = e => {viewer.imageryLayers.remove(base); base = viewer.imageryLayers.addImageryProvider(L[e.target.value], 0);};
+viewer.scene.globe.depthTestAgainstTerrain = false;
+let EX = +(Q.get('ex')||2), SC = Q.get('sc')==='p20'?'p20':'now', envPrim = null, zPrim = null, ENV = null, ZENV = null, B = null, opacity = 0.45;
+if(Q.get('env')==='airport') document.getElementById('envOn').checked = true;
+if(Q.get('zenv')==='0') document.getElementById('zenvOn').checked = false;
+document.getElementById('ex').value = String(EX); if(SC==='p20') document.querySelector('input[value=p20]').checked = true;
+const clrCol = c => c < 0 ? '#d7191c' : c < 10 ? '#fdae61' : c < 20 ? '#a6d96a' : '#1a9641';
+function buildEnv(){
+  if(envPrim){viewer.scene.primitives.remove(envPrim); envPrim=null;}
+  if(!document.getElementById('envOn').checked) return;
+  const n = ENV.h.length, pos = new Float64Array(n*3), col = new Uint8Array(n*4), a = Math.round(opacity*255);
+  const cols = ENV.colors.map(c => Cesium.Color.fromCssColorString(c));
+  for(let i=0;i<n;i++){const p=Cesium.Cartesian3.fromDegrees(ENV.lon[i],ENV.lat[i],ENV.h[i]*EX); pos[3*i]=p.x;pos[3*i+1]=p.y;pos[3*i+2]=p.z;
+    const c = cols[Math.max(0,ENV.g[i])] || Cesium.Color.GRAY; col[4*i]=c.red*255;col[4*i+1]=c.green*255;col[4*i+2]=c.blue*255;col[4*i+3]=a;}
+  const geom = new Cesium.Geometry({attributes:{
+      position:new Cesium.GeometryAttribute({componentDatatype:Cesium.ComponentDatatype.DOUBLE,componentsPerAttribute:3,values:pos}),
+      color:new Cesium.GeometryAttribute({componentDatatype:Cesium.ComponentDatatype.UNSIGNED_BYTE,componentsPerAttribute:4,normalize:true,values:col})},
+    indices:new Uint32Array(ENV.tri), primitiveType:Cesium.PrimitiveType.TRIANGLES, boundingSphere:Cesium.BoundingSphere.fromVertices(pos)});
+  envPrim = viewer.scene.primitives.add(new Cesium.Primitive({geometryInstances:new Cesium.GeometryInstance({geometry:geom}),
+    appearance:new Cesium.PerInstanceColorAppearance({flat:true,translucent:true,closed:false}),asynchronous:false}));
+}
+function buildZEnv(){
+  if(zPrim){viewer.scene.primitives.remove(zPrim); zPrim=null;}
+  if(!document.getElementById('zenvOn').checked) return;
+  const n = ZENV.h.length, pos = new Float64Array(n*3);
+  for(let i=0;i<n;i++){const p=Cesium.Cartesian3.fromDegrees(ZENV.lon[i],ZENV.lat[i],ZENV.h[i]*EX); pos[3*i]=p.x;pos[3*i+1]=p.y;pos[3*i+2]=p.z;}
+  const geom = new Cesium.Geometry({attributes:{position:new Cesium.GeometryAttribute({componentDatatype:Cesium.ComponentDatatype.DOUBLE,componentsPerAttribute:3,values:pos})},
+    indices:new Uint32Array(ZENV.tri), primitiveType:Cesium.PrimitiveType.TRIANGLES, boundingSphere:Cesium.BoundingSphere.fromVertices(pos)});
+  zPrim = viewer.scene.primitives.add(new Cesium.Primitive({geometryInstances:new Cesium.GeometryInstance({geometry:geom,attributes:{color:Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.fromCssColorString('#4a90d9').withAlpha(0.38))}}),
+    appearance:new Cesium.PerInstanceColorAppearance({flat:true,translucent:true,closed:false}),asynchronous:false}));
+}
+function styleBuildings(){
+  const add = SC==='p20' ? 20 : 0; let over=0, area=0, cl=[];
+  for(const e of B.entities.values){
+    const p = e.properties, g = p.ground.getValue(), rm = p.roof_med.getValue()+add, tm = p.top_max.getValue()+add;
+    const c = SC==='p20' ? p.clr_plus20.getValue() : p.clr_now.getValue(); cl.push(c);
+    if(c<0){over++; area += p.footprint_m2.getValue();}
+    if(e.polygon){e.polygon.height = g*EX; e.polygon.extrudedHeight = rm*EX; e.polygon.material = Cesium.Color.fromCssColorString(clrCol(c)).withAlpha(0.95); e.polygon.outline=false;}
+    e.position = Cesium.Cartesian3.fromDegrees(p.crit_lon.getValue(), p.crit_lat.getValue(), tm*EX);
+    e.point = new Cesium.PointGraphics({pixelSize:6,color:Cesium.Color.fromCssColorString(clrCol(c)),outlineColor:Cesium.Color.BLACK,outlineWidth:1});
+    e.description = `<table class="cesium-infoBox-defaultTable">
+     <tr><th>Cadastral ref. (part)</th><td>${p.localId.getValue()}</td></tr><tr><th>Floors (Catastro)</th><td>${p.numberOfFloorsAboveGround.getValue() ?? 'n/a'}</td></tr>
+     <tr><th>Footprint</th><td>${p.footprint_m2.getValue()} m²</td></tr><tr><th>Ground (LiDAR DTM)</th><td>${g.toFixed(1)} m AMSL</td></tr>
+     <tr><th>Highest point ${add?'(+20 m)':''}</th><td>${tm.toFixed(1)} m AMSL</td></tr><tr><th>Median roof ${add?'(+20 m)':''}</th><td>${rm.toFixed(1)} m AMSL</td></tr>
+     <tr><th>Easement limit at critical point</th><td>${p.env_at_crit.getValue().toFixed(1)} m AMSL</td></tr><tr><th>Governing surface</th><td>${p.gov_family.getValue()}</td></tr>
+     <tr><th>Clearance now</th><td>${p.clr_now.getValue().toFixed(1)} m</td></tr><tr><th>Clearance +20 m</th><td>${p.clr_plus20.getValue().toFixed(1)} m</td></tr>
+     <tr><th>Max height above ground allowed (at crit. point)</th><td>${(p.env_at_crit.getValue()-g).toFixed(1)} m</td></tr></table>
+     <p style="font-size:11px">Geometric comparison only (LiDAR 2022 + AESA KMZ of RD 657/2022). No legal value.</p>`;
+    e.name = 'Building ' + p.localId.getValue();
+  }
+  cl.sort((a,b)=>a-b);
+  document.getElementById('stats').innerHTML = `<b>${SC==='p20'?'+20 m scenario':'As built'}</b>: ${B.entities.values.length} buildings, <b>${over}</b> over the limit (${Math.round(area).toLocaleString()} m² footprint)<br>clearance min ${cl[0].toFixed(1)} m · median ${cl[Math.floor(cl.length/2)].toFixed(1)} m`;
+}
+async function lines(url,color,w,hgt){const ds = await Cesium.GeoJsonDataSource.load(url,{clampToGround:false}); viewer.dataSources.add(ds);
+  for(const e of ds.entities.values){ if(e.polygon){const h=e.polygon.hierarchy.getValue().positions; e.polyline=new Cesium.PolylineGraphics({positions:h.concat([h[0]]).map(p=>{const c=Cesium.Cartographic.fromCartesian(p);return Cesium.Cartesian3.fromRadians(c.longitude,c.latitude,hgt);}),width:w,material:color}); e.polygon=undefined;}} return ds;}
+(async()=>{
+  ENV = await (await fetch('data/envelope_mesh.json')).json();
+  document.getElementById('leg').innerHTML = ENV.groups.map((g,i)=>`<span class="sw" style="background:${ENV.colors[i]}"></span>${g}`).join('<br>');
+  buildEnv();
+  ZENV = await (await fetch('data/zal_envelope_mesh.json')).json(); buildZEnv();
+  B = await Cesium.GeoJsonDataSource.load('data/zal_buildings.geojson'); viewer.dataSources.add(B); styleBuildings();
+  await lines('data/zal_boundary.geojson',Cesium.Color.MAGENTA,4,2);
+  await lines('data/airport_movement_area.geojson',Cesium.Color.BLACK,2,1);
+  WD = await (await fetch('data/zal_boundary_wall.json')).json(); buildWall();
+  placeLabels();
+  const ZC = Q.get('report')==='1' ? Cesium.Cartesian3.fromDegrees(2.1419,41.3235,0) : Cesium.Cartesian3.fromDegrees(2.1392,41.3248,0);
+  const home = () => {viewer.camera.lookAt(ZC,new Cesium.HeadingPitchRange(Cesium.Math.toRadians(+(Q.get('hd')||-20)),Cesium.Math.toRadians(+(Q.get('pt')||-32)),+(Q.get('rg')||1900))); viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);};
+  viewer.homeButton.viewModel.command.beforeExecute.addEventListener(e=>{e.cancel=true;home();});
+  if(Q.get('view')==='airport') flyAirport(); else home();
+  if(Q.get('report')==='1') reportMode();
+  window.APP_READY = true;
+})();
+document.querySelectorAll('input[name=sc]').forEach(r=>r.onchange=e=>{SC=e.target.value;styleBuildings();});
+document.getElementById('hide').onclick=e=>{e.preventDefault();panel.style.display='none';show.style.display='block';};
+document.getElementById('show').onclick=e=>{e.preventDefault();panel.style.display='block';show.style.display='none';};
+document.getElementById('envOn').onchange = buildEnv; document.getElementById('zenvOn').onchange = buildZEnv;
+document.getElementById('op').oninput = e => {opacity=+e.target.value; buildEnv(); buildZEnv();};
+document.getElementById('ex').onchange = e => {EX=+e.target.value; buildEnv(); buildZEnv(); styleBuildings(); placeLabels(); buildWall();};
+window.flyAirport = () => {viewer.camera.lookAt(Cesium.Cartesian3.fromDegrees(2.0783,41.2969,0),new Cesium.HeadingPitchRange(0,Cesium.Math.toRadians(-80),34000)); viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);};
+let LBL=[], WALL=null, WD=null;
+function buildWall(){ if(WALL) viewer.entities.remove(WALL); if(!WD) return;
+  const pos=[]; for(let i=0;i<WD.lon.length;i++) pos.push(WD.lon[i],WD.lat[i]);
+  WALL=viewer.entities.add({wall:{positions:Cesium.Cartesian3.fromDegreesArray(pos),minimumHeights:WD.ground.map(h=>h*EX),maximumHeights:WD.env.map(h=>h*EX),material:Cesium.Color.MAGENTA.withAlpha(0.07),outline:false}});
+  if(window.WTOP) viewer.entities.remove(WTOP); const tp=[]; for(let i=0;i<WD.lon.length;i++) tp.push(WD.lon[i],WD.lat[i],WD.env[i]*EX);
+  window.WTOP=viewer.entities.add({polyline:{positions:Cesium.Cartesian3.fromDegreesArrayHeights(tp),width:2,material:new Cesium.PolylineDashMaterialProperty({color:Cesium.Color.MAGENTA})}});}
+function placeLabels(){
+  LBL.forEach(e=>viewer.entities.remove(e)); LBL=[];
+  const lab=(lon,lat,h,t,col,size)=>LBL.push(viewer.entities.add({position:Cesium.Cartesian3.fromDegrees(lon,lat,h),label:{text:t,font:`bold ${size||15}px Arial`,fillColor:col,outlineColor:Cesium.Color.WHITE,outlineWidth:4,style:Cesium.LabelStyle.FILL_AND_OUTLINE,verticalOrigin:Cesium.VerticalOrigin.BOTTOM,disableDepthTestDistance:Number.POSITIVE_INFINITY}}));
+  lab(2.1468,41.3262,62*EX,'ZAL Port target area',Cesium.Color.MAGENTA,16);
+  if(Q.get('view')!=='airport') lab(2.13547,41.32290,62*EX,'ZAL Service Center (critical)',Cesium.Color.fromCssColorString('#333'),13);
+  lab(2.0783,41.2969,250,'LEBL airport',Cesium.Color.BLACK,16);
+}
+function reportMode(){
+  document.getElementById('panel').style.display='none';
+  for(const c of ['.cesium-viewer-toolbar','.cesium-viewer-fullscreenContainer']){const el=document.querySelector(c); if(el) el.style.display='none';}
+  const d=document.createElement('div'); d.id='card';
+  d.style.cssText='position:absolute;left:14px;top:14px;background:rgba(255,255,255,.94);padding:10px 14px;border-radius:8px;font:13px Arial;box-shadow:0 1px 6px rgba(0,0,0,.25);max-width:380px';
+  if(Q.get('view')==='airport'){ d.innerHTML='<div style="font-weight:bold;font-size:15px">LEBL Barcelona-El Prat — strictest RD 657/2022 easement envelope</div><div style="margin:4px 0;color:#444">colour = governing (lowest) surface</div>'+ENV.groups.map((g,i)=>`<div><span class="sw" style="background:${ENV.colors[i]}"></span>${g}</div>`).join('')+'<div style="margin-top:4px"><span class="sw" style="background:magenta"></span>ZAL Port target area &nbsp; <span class="sw" style="background:#000"></span>runways</div><div style="margin-top:4px;color:#666;font-size:11px">Decimated 150 m display mesh; geometric prototype, no legal value.</div>'; document.body.appendChild(d); return; }
+  const add = SC==='p20';
+  d.style.cssText='position:absolute;left:14px;top:14px;background:rgba(255,255,255,.94);padding:10px 14px;border-radius:8px;font:13px Arial;box-shadow:0 1px 6px rgba(0,0,0,.25);max-width:380px';
+  d.innerHTML=`<div style="font-weight:bold;font-size:15px">ZAL Port — ${add?'scenario: every building +20 m':'as built (LiDAR 2022)'}</div>
+   <div style="margin:4px 0 6px;color:#444">${document.getElementById('stats').innerHTML.split('</b>:')[1].replace('<br>',' · ')}</div>
+   <div><b>Building colour = clearance</b> (limit − highest point)</div>
+   <div style="margin-top:3px"><span class="sw" style="background:#d7191c"></span>&lt; 0 m &nbsp;<span class="sw" style="background:#fdae61"></span>0–10 &nbsp;<span class="sw" style="background:#a6d96a"></span>10–20 &nbsp;<span class="sw" style="background:#1a9641"></span>&gt; 20 m</div>
+   <div style="margin-top:4px"><span class="sw" style="background:#4a90d9;opacity:.6"></span>strictest easement envelope (48–59 m AMSL) &nbsp; <span class="sw" style="background:magenta"></span>ZAL boundary (wall up to the envelope)</div>
+   <div style="margin-top:4px;color:#666;font-size:11px">Vertical ×${EX}. Footprints extruded to median roof; dots = highest point. Geometric prototype, no legal value.</div>`;
+  document.body.appendChild(d);
+}
+</script></body></html>

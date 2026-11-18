@@ -1,0 +1,25 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZAL Port vs Barcelona-El Prat airport easements</title><link rel="stylesheet" href="style.css"></head><body>
+<header><h1>ZAL Port (Barcelona) vs Barcelona-El Prat airport easements</h1>
+<p>How the RD 657/2022 aeronautical easements (strictest of the aerodrome, radio-electric and operational surfaces) limit building heights in the ZAL Port logistics area, as built and with every building +20 m. Built with free and open data and tools.</p></header>
+<main>
+<section><h2>Key results</h2><div class="grid">
+<div class="card"><span class="kpi">48 m AMSL</span><br>Governing ceiling over 79.8 % of ZAL: the aerodrome <b style="display:inline">inner horizontal</b> surface, not a radio-electric one. Conical 15.9 %, VOR operational 4.3 %.</div>
+<div class="card"><span class="kpi">0 / 64</span><br>Buildings above the limit today. Minimum clearance +10.8 m, median +38.8 m.</div>
+<div class="card"><span class="kpi">1 / 64</span><br>Above the limit with +20 m: the ZAL Service Center, at −9.2 m (4,145 m² footprint). Median clearance +18.8 m.</div>
+<div class="card"><span class="kpi">38–56 m</span><br>Permitted height above the ground inside ZAL (median 44 m).</div></div>
+<table style="margin-top:12px"><tr><th>Scenario</th><th>Above the limit</th><th>Footprint above</th><th>Floor area above (est.)</th><th>Min</th><th>Median</th><th>Max clearance</th></tr>
+<tr><td>As built (LiDAR 2022)</td><td>0</td><td>0 m²</td><td>0 m²</td><td>+10.8 m</td><td>+38.8 m</td><td>+46.9 m</td></tr>
+<tr><td>Every building +20 m</td><td>1</td><td>4,145 m²</td><td>13,424 m²</td><td>−9.2 m</td><td>+18.8 m</td><td>+26.9 m</td></tr></table></section>
+<section><h2>Explore</h2><div class="grid">
+<div class="card"><b>Web 3D app</b>ZAL buildings coloured by clearance, the strictest envelope, a +20 m toggle and click info per building. Runs in the browser (CesiumJS, no account needed).<br><a class="btn" href="app/index.html">Open the 3D app</a></div>
+<div class="card"><b>Reports (PDF)</b>A short easements report and the pipeline report.<br><a class="btn" href="reports/Report_ZAL_Port_easements.pdf">Easements report</a><a class="btn" href="reports/Report_pipeline.pdf">Pipeline report</a></div>
+<div class="card"><b>Figures</b>2D maps, cross-sections and 3D captures.<br><a class="btn" href="figures/index.html">Figure gallery</a></div>
+<div class="card"><b>Interactive Plotly 3D</b><a href="interactive/C_interactive_3d_ZAL.html">ZAL buildings vs envelope</a><br><a href="interactive/E_airport_easements_3d.html">Airport-wide easements</a></div></div></section>
+<section><h2>Downloads</h2><table>
+<tr><td><a href="downloads/files.zip">files.zip</a> (11.5 MB)</td><td>Kit for Rhino 7 (.3dm and scripts) and Revit 2024 (IFC4, Dynamo), shared data (CSV, GeoJSON, OBJ, JSON) and GIS data (GeoPackage, GeoTIFF). Each folder has a short README with the workflow.</td></tr>
+<tr><td><a href="downloads/web3d_app.zip">web3d_app.zip</a> (0.7 MB)</td><td>Offline copy of the web 3D app. Serve it with <code>python3 -m http.server</code>.</td></tr></table></section>
+<section><h2>Study area and data</h2><p>The ZAL Port target area is OpenStreetMap way 1554492934, "Zona d'Activitats Logístiques del Port" (60.2 ha, Barcelona municipality). It is bounded by Carrer A and the ZAL Service Center (W), Av. dels Ports d'Europa (S), Ronda del Port / Far del Llobregat (E) and the rail corridor (N).</p>
+<p>Data sources: AESA KMZ of RD 657/2022, ICGC/AMB LiDAR 2022 (25 cm DSM/DTM), DG Catastro INSPIRE buildings, © OpenStreetMap contributors. Heights are m AMSL (Alicante).</p>
+<p class="warn">Geometric prototype only. The AESA KMZ has no legal value; RD 657/2022 and AESA's prior agreement (RD 369/2023) prevail. Building heights come from 2022 LiDAR and include rooftop elements.</p></section>
+</main><footer>ZAL Port easements prototype · November 2026 · basemaps © OpenStreetMap contributors, Esri</footer></body></html>
